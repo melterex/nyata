@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Счетчик баллов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .counter {
+            font-size: 120px;
+            margin: 30px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+        }
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 30px 0;
+        }
+        button {
+            padding: 18px 30px;
+            font-size: 20px;
+            background: #ffd700;
+            border: none;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            color: #333;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            background: #ffed4a;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .online {
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50px;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .reset-btn {
+            background: #ff6b6b;
+            color: white;
+            margin-top: 10px;
+        }
+        .reset-btn:hover {
+            background: #ff5252;
+        }
+        .status {
+            color: #ffd700;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>твои баллы</h1>
+        <div class="counter" id="counter">0</div>
+        
+        <div class="buttons">
+            <button onclick="addPoint(1)">я поспала 8 часов (+1)</button>
+            <button onclick="addPoint(2)">я поспала 10 часов (+2)</button>
+            <button onclick="addPoint(2)">я сделала домашку (+2)</button>
+            <button onclick="addPoint(3)">я сделала домашку без джипити (+3)</button>
+            <button onclick="addPoint(-1)">я соврала (-1)</button>
+        </div>
+        
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <script>
+        // Конфигурация Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyD3qZSSTiCGYp4iiERAXUJVZMp77QsoopU",
+            authDomain: "nyatachuk.firebaseapp.com",
+            databaseURL: "https://nyatachuk-default-rtdb.europe-west1.firebasedatabase.app/", // ⚠️ ВАЖНО: исправьте URL!
+            projectId: "nyatachuk",
+            storageBucket: "nyatachuk.firebasestorage.app",
+            messagingSenderId: "1081574830768",
+            appId: "1:1081574830768:web:ea7b9265451f205c4f8175",
+            measurementId: "G-V44DTLFJ4H"
+        };
+
+        try {
+            // Инициализация Firebase
+            firebase.initializeApp(firebaseConfig);
+            const db = firebase.database();
+            
+            // Ссылки на данные в базе
+            const counterRef = db.ref('counter');
+            const onlineRef = db.ref('online');
+
+            // Проверка подключения
+            console.log("Firebase инициализирован");
+
+            // Уникальный ID пользователя
+            const userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
+            // 👇 ИСПРАВЛЕНО: создаем userRef правильно
+            const userRef = onlineRef.child(userId);
+
+            // Загружаем начальное значение
+            counterRef.once('value').then((snapshot) => {
+                const value = snapshot.val() || 0;
+                document.getElementById('counter').textContent = value;
+                console.log("Загружено значение:", value);
+            });
+
+            // Слушаем изменения
+            counterRef.on('value', (snapshot) => {
+                const value = snapshot.val() || 0;
+                document.getElementById('counter').textContent = value;
+            });
+
+            // Онлайн статус
+            userRef.set({
+                online: true,
+                lastSeen: Date.now()
+            });
+            
+            userRef.onDisconnect().remove();
+
+            // Счетчик онлайн
+            onlineRef.on('value', (snapshot) => {
+                const count = snapshot.numChildren();
+                document.getElementById('online').innerHTML = `👥 Онлайн: ${count}`;
+            });
+
+            // Функция добавления баллов
+            window.addPoint = function(n) {
+                counterRef.transaction((current) => {
+                    return (current || 0) + n;
+                }).then(() => {
+                    console.log("Баллы добавлены:", n);
+                }).catch((error) => {
+                    console.error("Ошибка:", error);
+                    alert("Ошибка подключения к базе данных!");
+                });
+            };
+
+            // Функция сброса
+            window.resetCounter = function() {
+                if (confirm('❓ Точно сбросить все баллы?')) {
+                    counterRef.set(0).then(() => {
+                        console.log("Счетчик сброшен");
+                    });
+                }
+            };
+
+            // Обновляем статус
+            setInterval(() => {
+                userRef.update({ lastSeen: Date.now() });
+            }, 30000);
+
+        } catch (error) {
+            console.error("Ошибка Firebase:", error);
+            document.getElementById('online').innerHTML = "❌ Ошибка подключения";
+            document.getElementById('status').innerHTML = "🔴 Офлайн";
+        }
+    </script>
+</body>
+</html>
